@@ -1,6 +1,6 @@
 const express = require("express");
 const Admin = require("../models/Admin");
-const Coupon = require("../models/Coupon"); // Added missing import for coupons
+const Coupon = require("../models/Coupon"); // Import Coupon model
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 
@@ -74,18 +74,36 @@ router.get("/coupons", verifyToken, async (req, res) => {
   }
 });
 
-// Admin route: Update coupon details (toggle availability, update coupon code, etc.)
+// Admin route: Update coupon status (toggle availability)
 router.put("/coupon/update/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
-    // updateData can include fields like status, code, etc.
-    const updateData = req.body;
-    const coupon = await Coupon.findByIdAndUpdate(id, updateData, { new: true });
+    const { status } = req.body; // Only updating status
+    console.log(`🔄 Debug - Updating coupon ${id} with status: ${status}`);
+
+    const coupon = await Coupon.findByIdAndUpdate(id, { status }, { new: true });
     if (!coupon) return res.status(404).json({ message: "Coupon not found" });
-    res.json({ message: "Coupon updated successfully", coupon });
+
+    res.json({ message: "✅ Coupon updated successfully", coupon });
   } catch (err) {
-    console.error("Error updating coupon:", err);
+    console.error("❌ Error updating coupon:", err);
     res.status(500).json({ message: "Error updating coupon" });
+  }
+});
+
+// Admin route: Delete a coupon
+router.delete("/coupon/delete/:id", verifyToken, async (req, res) => {
+  try {
+    const { id } = req.params;
+    console.log(`🗑 Debug - Deleting coupon with ID: ${id}`);
+
+    const coupon = await Coupon.findByIdAndDelete(id);
+    if (!coupon) return res.status(404).json({ message: "Coupon not found" });
+
+    res.json({ message: "✅ Coupon deleted successfully" });
+  } catch (err) {
+    console.error("❌ Error deleting coupon:", err);
+    res.status(500).json({ message: "Error deleting coupon" });
   }
 });
 
