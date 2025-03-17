@@ -54,6 +54,29 @@ router.get("/claim", checkAbuse, async (req, res) => {
   }
 });
 
+// Claim a specific coupon by ID
+router.put("/claim/:id", checkAbuse, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const coupon = await Coupon.findOne({ _id: id, status: "available" });
+
+    if (!coupon) {
+      return res.status(404).json({ message: "Coupon not found or already claimed" });
+    }
+
+    // Mark coupon as claimed
+    coupon.status = "claimed";
+    coupon.assignedTo = req.ip;
+    await coupon.save();
+
+    res.cookie("claimed", true, { maxAge: 60000, httpOnly: true });
+    res.json({ message: "Coupon claimed successfully!", coupon });
+  } catch (err) {
+    console.error("Error claiming coupon:", err);
+    res.status(500).json({ message: "Error claiming coupon" });
+  }
+});
+
 // Admin - Add new coupons
 router.post("/admin/add", async (req, res) => {
   try {
