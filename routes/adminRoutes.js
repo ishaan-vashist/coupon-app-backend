@@ -62,7 +62,22 @@ const verifyToken = (req, res, next) => {
   }
 };
 
-// Protected admin route: Get all coupons
+//  Ensure `claim-history` is correctly defined
+router.get("/claim-history", verifyToken, async (req, res) => {
+  try {
+    console.log("🔍 Debug - Fetching claim history");
+    const claimedCoupons = await Coupon.find({ status: "claimed" })
+      .select("code assignedTo updatedAt")
+      .sort({ updatedAt: -1 });
+
+    res.json(claimedCoupons);
+  } catch (err) {
+    console.error("❌ Error fetching claim history:", err);
+    res.status(500).json({ message: "Error fetching claim history" });
+  }
+});
+
+// ✅ Protected admin route: Get all coupons
 router.get("/coupons", verifyToken, async (req, res) => {
   try {
     console.log("🔍 Debug - Admin accessing coupons");
@@ -74,7 +89,7 @@ router.get("/coupons", verifyToken, async (req, res) => {
   }
 });
 
-// Admin route: Update coupon status (toggle availability)
+// ✅ Admin route: Update coupon status (toggle availability)
 router.put("/coupon/update/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
@@ -91,21 +106,7 @@ router.put("/coupon/update/:id", verifyToken, async (req, res) => {
   }
 });
 
-// Get claim history (Admin Only)
-router.get("/admin/claim-history", verifyToken, async (req, res) => {
-  try {
-    const claimedCoupons = await Coupon.find({ status: "claimed" })
-      .select("code assignedTo updatedAt")
-      .sort({ updatedAt: -1 });
-
-    res.json(claimedCoupons);
-  } catch (err) {
-    console.error("Error fetching claim history:", err);
-    res.status(500).json({ message: "Error fetching claim history" });
-  }
-});
-
-// Admin route: Delete a coupon
+// ✅ Admin route: Delete a coupon
 router.delete("/coupon/delete/:id", verifyToken, async (req, res) => {
   try {
     const { id } = req.params;
