@@ -65,9 +65,8 @@ const verifyToken = (req, res, next) => {
 //  Ensure `claim-history` is correctly defined
 router.get("/claim-history", verifyToken, async (req, res) => {
   try {
-    console.log("🔍 Debug - Fetching claim history");
     const claimedCoupons = await Coupon.find({ status: "claimed" })
-      .select("code assignedTo updatedAt")
+      .select("code assignedTo updatedAt") //  Ensure updatedAt is selected
       .sort({ updatedAt: -1 });
 
     res.json(claimedCoupons);
@@ -76,6 +75,7 @@ router.get("/claim-history", verifyToken, async (req, res) => {
     res.status(500).json({ message: "Error fetching claim history" });
   }
 });
+
 
 // ✅ Protected admin route: Get all coupons
 router.get("/coupons", verifyToken, async (req, res) => {
