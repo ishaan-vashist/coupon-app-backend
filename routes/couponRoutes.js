@@ -2,20 +2,19 @@ const express = require("express");
 const Coupon = require("../models/Coupon");
 const router = express.Router();
 
-// ✅ Middleware to Prevent Abuse - Now Checks User Per Coupon
+// ✅ Middleware to Prevent Abuse - Now Checks Per User, Not Just IP
 const checkAbuse = async (req, res, next) => {
-  const userIp = req.ip;
+  let userIp = req.headers["x-forwarded-for"] || req.connection.remoteAddress; // ✅ Get real IP
 
   // ✅ Check if user already owns an **active** (unexpired) coupon
   const existingClaim = await Coupon.findOne({
     assignedTo: userIp,
-    updatedAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) }, // Last 10 min
     status: "claimed",
   });
 
   if (existingClaim) {
     return res.status(429).json({
-      message: "⏳ You have recently claimed a coupon. Wait 10 minutes before claiming again.",
+      message: "⏳ You have already claimed a coupon. You must wait before claiming another.",
     });
   }
 
@@ -33,10 +32,10 @@ router.get("/available", async (req, res) => {
   }
 });
 
-// ✅ Claim an Available Coupon (Allows Multiple Users)
+// ✅ Claim an Available Coupon (Multiple Users Can Claim Different Coupons)
 router.get("/claim", checkAbuse, async (req, res) => {
   try {
-    const userIp = req.ip;
+    let userIp = req.headers["x-forwarded-for"] || req.connection.remoteAddress; // ✅ Use real IP
 
     // ✅ Get the first available coupon
     const coupon = await Coupon.findOneAndUpdate(
@@ -51,7 +50,7 @@ router.get("/claim", checkAbuse, async (req, res) => {
       });
     }
 
-    // ✅ Set a cookie to prevent multiple claims for 10 minutes
+    // ✅ Set a cookie to prevent multiple claims for 10 minutes (client-side only)
     res.cookie("claimed", true, { maxAge: 10 * 60 * 1000, httpOnly: true });
 
     res.json({ message: "🎉 Coupon successfully claimed!", coupon: coupon.code });
@@ -65,7 +64,7 @@ router.get("/claim", checkAbuse, async (req, res) => {
 router.put("/claim/:id", checkAbuse, async (req, res) => {
   try {
     const { id } = req.params;
-    const userIp = req.ip;
+    let userIp = req.headers["x-forwarded-for"] || req.connection.remoteAddress;
 
     const coupon = await Coupon.findOneAndUpdate(
       { _id: id, status: "available" },
