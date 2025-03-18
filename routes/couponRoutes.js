@@ -6,28 +6,33 @@ const router = express.Router();
 const checkAbuse = async (req, res, next) => {
   const userIp = req.ip;
 
-  // ✅ Allow new claims after 10 minutes
+  // ✅ Check if this user has already claimed a coupon in the last 10 minutes
   const existingClaim = await Coupon.findOne({
     assignedTo: userIp,
-    updatedAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) } // 10 minutes cooldown
+    updatedAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) }, // Last 10 minutes
   });
 
   if (existingClaim) {
-    return res.status(429).json({ message: "⏳ You have recently claimed a coupon. Please wait 10 minutes before claiming again." });
+    return res.status(429).json({
+      message:
+        "⏳ You have recently claimed a coupon. Please wait 10 minutes before claiming again.",
+    });
   }
 
-  // ✅ Reduce cookie restriction to 10 minutes
+  // ✅ Browser-based restriction (Prevents spam from same browser)
   if (req.cookies && req.cookies.claimed) {
-    return res.status(429).json({ message: "⏳ Please wait 10 minutes before claiming another coupon! (Browser limit)" });
+    return res.status(429).json({
+      message: "⏳ Please wait 10 minutes before claiming another coupon! (Browser limit)",
+    });
   }
 
   next();
 };
 
-// Get available coupons (For Users to Choose)
+// ✅ Get available coupons (For Users to Choose)
 router.get("/available", async (req, res) => {
   try {
-    const coupons = await Coupon.find({ status: "available" });
+    const coupons = await Coupon.find({ status: "available" }); // Only fetch available ones
     res.json(coupons);
   } catch (err) {
     console.error("❌ Error fetching available coupons:", err);
@@ -35,20 +40,22 @@ router.get("/available", async (req, res) => {
   }
 });
 
-// Get available coupon (Round Robin - Auto Assign)
+// ✅ Claim an available coupon (Each user gets a different one)
 router.get("/claim", checkAbuse, async (req, res) => {
   try {
-    const coupon = await Coupon.findOne({ status: "available" }).sort({ timestamp: 1 });
+    const coupon = await Coupon.findOneAndUpdate(
+      { status: "available" }, // ✅ Find an available coupon
+      { status: "claimed", assignedTo: req.ip, updatedAt: new Date() }, // Assign to user
+      { new: true }
+    );
+
     if (!coupon) {
-      return res.status(404).json({ message: "❌ No coupons available at the moment. Please try again later." });
+      return res.status(404).json({
+        message: "❌ No coupons available at the moment. Please try again later.",
+      });
     }
 
-    // Mark coupon as claimed and record the IP address
-    coupon.status = "claimed";
-    coupon.assignedTo = req.ip;
-    await coupon.save();
-
-    // Set a cookie to prevent additional claims from the same browser for 10 minutes
+    // ✅ Set a cookie to prevent additional claims from the same browser for 10 minutes
     res.cookie("claimed", true, { maxAge: 10 * 60 * 1000, httpOnly: true });
 
     res.json({ message: "🎉 Coupon successfully claimed!", coupon: coupon.code });
@@ -58,20 +65,19 @@ router.get("/claim", checkAbuse, async (req, res) => {
   }
 });
 
-// Claim a specific coupon by ID
+// ✅ Claim a specific coupon by ID
 router.put("/claim/:id", checkAbuse, async (req, res) => {
   try {
     const { id } = req.params;
-    const coupon = await Coupon.findOne({ _id: id, status: "available" });
+    const coupon = await Coupon.findOneAndUpdate(
+      { _id: id, status: "available" }, // Find a specific available coupon
+      { status: "claimed", assignedTo: req.ip, updatedAt: new Date() }, // Assign to user
+      { new: true }
+    );
 
     if (!coupon) {
       return res.status(404).json({ message: "❌ Coupon not found or already claimed." });
     }
-
-    // Mark coupon as claimed
-    coupon.status = "claimed";
-    coupon.assignedTo = req.ip;
-    await coupon.save();
 
     res.cookie("claimed", true, { maxAge: 10 * 60 * 1000, httpOnly: true });
     res.json({ message: "🎉 Coupon claimed successfully!", coupon });
@@ -81,7 +87,7 @@ router.put("/claim/:id", checkAbuse, async (req, res) => {
   }
 });
 
-// Admin - Add new coupons
+// ✅ Admin - Add new coupons
 router.post("/admin/add", async (req, res) => {
   try {
     const { code } = req.body;
