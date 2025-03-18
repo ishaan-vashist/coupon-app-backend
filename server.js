@@ -24,11 +24,12 @@ mongoose
     process.exit(1); // Exit if DB connection fails
   });
 
-// ✅ Rate Limiting: Prevent Abuse
+// ✅ Rate Limiting: Prevent Abuse (Extended Limit)
 const claimLimiter = rateLimit({
-  windowMs: 1 * 60 * 1000, // 1 minute
-  max: 10, // Allow up to 10 claims per minute
-  message: { message: "Too many requests, please wait before trying again." },
+  windowMs: 5 * 60 * 1000, // ⏳ Increased to 5 minutes
+  max: 100, // 🚀 Allow up to 100 claims per window
+  message: { message: "Too many requests, please try again later." },
+  headers: true, // Send rate limit headers to clients
 });
 
 app.use("/api/coupons/claim", claimLimiter); // Apply only to claim route
