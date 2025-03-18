@@ -2,19 +2,20 @@ const express = require("express");
 const Coupon = require("../models/Coupon");
 const router = express.Router();
 
-// ✅ Middleware to Prevent Abuse - Now Checks Per User, Not Just IP
+// ✅ Middleware to Prevent Abuse - Ensures One Active Coupon Per User
 const checkAbuse = async (req, res, next) => {
   let userIp = req.headers["x-forwarded-for"] || req.connection.remoteAddress; // ✅ Get real IP
 
-  // ✅ Check if user already owns an **active** (unexpired) coupon
+  // ✅ Check if user has an **active** claimed coupon in the last 10 minutes
   const existingClaim = await Coupon.findOne({
     assignedTo: userIp,
     status: "claimed",
+    updatedAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) }, // ⏳ Last 10 minutes
   });
 
   if (existingClaim) {
     return res.status(429).json({
-      message: "⏳ You have already claimed a coupon. You must wait before claiming another.",
+      message: "⏳ You have already claimed a coupon. Please wait 10 minutes before claiming another.",
     });
   }
 
@@ -32,10 +33,10 @@ router.get("/available", async (req, res) => {
   }
 });
 
-// ✅ Claim an Available Coupon (Multiple Users Can Claim Different Coupons)
+// ✅ Claim an Available Coupon (Restricts Users to One Active Coupon)
 router.get("/claim", checkAbuse, async (req, res) => {
   try {
-    let userIp = req.headers["x-forwarded-for"] || req.connection.remoteAddress; // ✅ Use real IP
+    let userIp = req.headers["x-forwarded-for"] || req.connection.remoteAddress; // ✅ Get real IP
 
     // ✅ Get the first available coupon
     const coupon = await Coupon.findOneAndUpdate(
