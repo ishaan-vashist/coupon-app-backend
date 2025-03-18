@@ -2,76 +2,74 @@ const express = require("express");
 const Coupon = require("../models/Coupon");
 const router = express.Router();
 
-// Middleware to prevent abuse (IP and Cookie-based tracking)
+// ✅ Middleware to Prevent Abuse - Now Checks User Per Coupon
 const checkAbuse = async (req, res, next) => {
   const userIp = req.ip;
 
-  // ✅ Check if this user has already claimed a coupon in the last 10 minutes
+  // ✅ Check if user already owns an **active** (unexpired) coupon
   const existingClaim = await Coupon.findOne({
     assignedTo: userIp,
-    updatedAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) }, // Last 10 minutes
+    updatedAt: { $gte: new Date(Date.now() - 10 * 60 * 1000) }, // Last 10 min
+    status: "claimed",
   });
 
   if (existingClaim) {
     return res.status(429).json({
-      message:
-        "⏳ You have recently claimed a coupon. Please wait 10 minutes before claiming again.",
-    });
-  }
-
-  // ✅ Browser-based restriction (Prevents spam from same browser)
-  if (req.cookies && req.cookies.claimed) {
-    return res.status(429).json({
-      message: "⏳ Please wait 10 minutes before claiming another coupon! (Browser limit)",
+      message: "⏳ You have recently claimed a coupon. Wait 10 minutes before claiming again.",
     });
   }
 
   next();
 };
 
-// ✅ Get available coupons (For Users to Choose)
+// ✅ Get Available Coupons for Users
 router.get("/available", async (req, res) => {
   try {
-    const coupons = await Coupon.find({ status: "available" }); // Only fetch available ones
+    const coupons = await Coupon.find({ status: "available" });
     res.json(coupons);
   } catch (err) {
     console.error("❌ Error fetching available coupons:", err);
-    res.status(500).json({ message: "Server error while fetching available coupons" });
+    res.status(500).json({ message: "Server error while fetching available coupons." });
   }
 });
 
-// ✅ Claim an available coupon (Each user gets a different one)
+// ✅ Claim an Available Coupon (Allows Multiple Users)
 router.get("/claim", checkAbuse, async (req, res) => {
   try {
+    const userIp = req.ip;
+
+    // ✅ Get the first available coupon
     const coupon = await Coupon.findOneAndUpdate(
-      { status: "available" }, // ✅ Find an available coupon
-      { status: "claimed", assignedTo: req.ip, updatedAt: new Date() }, // Assign to user
+      { status: "available" }, // Find an available coupon
+      { status: "claimed", assignedTo: userIp, updatedAt: new Date() }, // Assign to user
       { new: true }
     );
 
     if (!coupon) {
       return res.status(404).json({
-        message: "❌ No coupons available at the moment. Please try again later.",
+        message: "❌ No coupons available at the moment. Try again later.",
       });
     }
 
-    // ✅ Set a cookie to prevent additional claims from the same browser for 10 minutes
+    // ✅ Set a cookie to prevent multiple claims for 10 minutes
     res.cookie("claimed", true, { maxAge: 10 * 60 * 1000, httpOnly: true });
 
     res.json({ message: "🎉 Coupon successfully claimed!", coupon: coupon.code });
   } catch (err) {
     console.error("❌ Error claiming coupon:", err);
-    res.status(500).json({ message: "Error while claiming coupon" });
+    res.status(500).json({ message: "Error while claiming coupon." });
   }
 });
 
-// ✅ Claim a specific coupon by ID
+// ✅ Claim a Specific Coupon by ID
 router.put("/claim/:id", checkAbuse, async (req, res) => {
   try {
     const { id } = req.params;
+    const userIp = req.ip;
+
     const coupon = await Coupon.findOneAndUpdate(
-      { _id: id, status: "available" }, // Find a specific available coupon
-      { status: "claimed", assignedTo: req.ip, updatedAt: new Date() }, // Assign to user
+      { _id: id, status: "available" },
+      { status: "claimed", assignedTo: userIp, updatedAt: new Date() },
       { new: true }
     );
 
@@ -80,14 +78,15 @@ router.put("/claim/:id", checkAbuse, async (req, res) => {
     }
 
     res.cookie("claimed", true, { maxAge: 10 * 60 * 1000, httpOnly: true });
+
     res.json({ message: "🎉 Coupon claimed successfully!", coupon });
   } catch (err) {
     console.error("❌ Error claiming coupon:", err);
-    res.status(500).json({ message: "Error while claiming coupon" });
+    res.status(500).json({ message: "Error while claiming coupon." });
   }
 });
 
-// ✅ Admin - Add new coupons
+// ✅ Admin - Add New Coupons
 router.post("/admin/add", async (req, res) => {
   try {
     const { code } = req.body;
@@ -96,7 +95,7 @@ router.post("/admin/add", async (req, res) => {
     res.status(201).json({ message: "✅ Coupon added successfully!" });
   } catch (err) {
     console.error("❌ Error adding coupon:", err);
-    res.status(500).json({ message: "Error while adding coupon" });
+    res.status(500).json({ message: "Error while adding coupon." });
   }
 });
 
